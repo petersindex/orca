@@ -143,6 +143,27 @@ export function handleRichMarkdownEditorClick({
   return true
 }
 
+// Why: ProseMirror leaves every Shift+mousedown to native selection and never
+// calls handleClick for it, so Shift+modifier link clicks are caught here.
+export function handleRichMarkdownShiftModMouseDown(
+  view: EditorView,
+  event: MouseEvent,
+  isMac: boolean,
+  routeClick: (view: EditorView, pos: number, event: MouseEvent) => boolean
+): boolean {
+  const modKey = isMac ? event.metaKey : event.ctrlKey
+  if (event.button !== 0 || !event.shiftKey || !modKey) {
+    return false
+  }
+  const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })
+  if (!pos || !routeClick(view, pos.pos, event)) {
+    return false
+  }
+  // Why: otherwise the native Shift-click still extends the selection to the link.
+  event.preventDefault()
+  return true
+}
+
 function activateMarkdownImageClick({
   activateMarkdownLink,
   filePath,

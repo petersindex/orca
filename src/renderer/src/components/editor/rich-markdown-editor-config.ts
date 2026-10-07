@@ -1,4 +1,5 @@
 import type { Editor, UseEditorOptions } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -18,6 +19,7 @@ import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuat
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   handleRichMarkdownEditorClick,
+  handleRichMarkdownShiftModMouseDown,
   type ActivateMarkdownLink,
   type RichMarkdownRuntimeSettings
 } from './rich-markdown-editor-click-routing'
@@ -129,6 +131,27 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     setDocLinkMenu
   } = params
 
+  const routeClick = (view: EditorView, pos: number, event: MouseEvent): boolean =>
+    handleRichMarkdownEditorClick({
+      activateMarkdownLink,
+      editorRef,
+      event,
+      filePath,
+      htmlSuperscriptLinkContext,
+      isMac,
+      markdownCommentsRef,
+      markdownSourceLineOffsetRef,
+      onOpenDocLinkRef,
+      pos,
+      rootRef,
+      runtimeEnvironmentId,
+      scrollRichMarkdownReviewNoteCardIntoView,
+      settings,
+      view,
+      worktreeId,
+      worktreeRoot
+    })
+
   return {
     immediatelyRender: false,
     content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
@@ -139,7 +162,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleDOMEvents: {
-        cut: handleRichMarkdownCut
+        cut: handleRichMarkdownCut,
+        mousedown: (view, event) =>
+          handleRichMarkdownShiftModMouseDown(view, event, isMac, routeClick)
       },
       handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
@@ -176,27 +201,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
             runtimeEnvironmentId
           })
       }),
-      handleClick: (view, pos, event) => {
-        return handleRichMarkdownEditorClick({
-          activateMarkdownLink,
-          editorRef,
-          event,
-          filePath,
-          htmlSuperscriptLinkContext,
-          isMac,
-          markdownCommentsRef,
-          markdownSourceLineOffsetRef,
-          onOpenDocLinkRef,
-          pos,
-          rootRef,
-          runtimeEnvironmentId,
-          scrollRichMarkdownReviewNoteCardIntoView,
-          settings,
-          view,
-          worktreeId,
-          worktreeRoot
-        })
-      }
+      handleClick: routeClick
     },
     onFocus: () => {
       window.api.ui.setMarkdownEditorFocused(true)
