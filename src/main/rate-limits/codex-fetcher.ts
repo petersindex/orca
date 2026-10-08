@@ -1,4 +1,6 @@
+import { net } from 'electron'
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
+import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -78,16 +80,17 @@ function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   return env
 }
 
+// Why net.fetch: it runs on the default session, which carries the proxy set in Orca's settings.
 function fetchCodexUsage(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return net.fetch(url, init)
 }
 
 function fetchCodexResetCredits(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return net.fetch(url, init)
 }
 
 function consumeCodexResetCredit(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return net.fetch(url, init)
 }
 
 async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
@@ -107,6 +110,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     cwd: resolveHiddenRateLimitPtyCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+      ...buildConfiguredProxyEnv(options?.networkProxySettings),
       ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
     })
   })
