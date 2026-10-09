@@ -45,14 +45,14 @@ function closingRpcChild(): ProbeChild {
   })
 }
 
-async function fetchWithFailedProbe() {
+async function fetchWithFailedProbe(codexHomePath?: string) {
   const child = closingRpcChild()
   childSpawnMock.mockReturnValue(child)
   readFileMock.mockResolvedValue(
     JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
   )
   netFetchMock.mockResolvedValue(new Response(null, { status: 503 }))
-  const result = fetchCodexRateLimits({ networkProxySettings: PROXY })
+  const result = fetchCodexRateLimits({ networkProxySettings: PROXY, codexHomePath })
   await vi.advanceTimersByTimeAsync(0)
   child.exitCode = 1
   child.emit('close', 1, null)
@@ -84,6 +84,22 @@ describe('Codex usage through the proxy set in Orca', () => {
         HTTP_PROXY: 'http://127.0.0.1:1080',
         NO_PROXY: 'localhost,127.0.0.1'
       })
+    )
+  })
+
+  it('carries the configured proxy across wsl.exe into a WSL Codex probe', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await fetchWithFailedProbe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+
+    const [program, , spawnSpec] = childSpawnMock.mock.calls[0]
+    expect(program).toBe('wsl.exe')
+    expect(spawnSpec.env.WSLENV.split(':')).toEqual(
+      expect.arrayContaining(['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY'])
     )
   })
 

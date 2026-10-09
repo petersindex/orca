@@ -3,6 +3,7 @@ import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../share
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -102,17 +103,23 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     ? buildWslCodexCommand(options.codexHomePath, codexArgs)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
+  const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+  const env = withCliRuntimeOnPath(codexCommand, {
+    ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+    ...proxyEnv,
+    ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
+  })
+  if (wslCodex) {
+    // Why: wsl.exe only forwards host variables that WSLENV names.
+    addWslEnvKeys(env, Object.keys(proxyEnv))
+  }
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
   const child = spawnProcess({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: resolveHiddenRateLimitPtyCwd(),
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      ...buildConfiguredProxyEnv(options?.networkProxySettings),
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-    })
+    env
   })
   return readCodexRateLimitsViaRpc({
     child: child as CodexRpcRateLimitChild,
